@@ -49,6 +49,9 @@ func TestRenderDirectoryWithAllChildrenSelected(t *testing.T) {
 	
 	model.state = state
 	
+	// Initialize the model to set up viewport
+	model.Init()
+	
 	// Render and check
 	view := model.View()
 	lines := strings.Split(view, "\n")
@@ -116,6 +119,9 @@ func TestRenderAfterParentSelection(t *testing.T) {
 	
 	model.state = state
 	
+	// Initialize the model to set up viewport
+	model.Init()
+	
 	// Render and check
 	view := model.View()
 	lines := strings.Split(view, "\n")
@@ -171,6 +177,9 @@ func TestRenderPartialSelection(t *testing.T) {
 	state = state.SetSelected("/root/dir1/file1.txt", true)
 	
 	model.state = state
+	
+	// Initialize the model to set up viewport
+	model.Init()
 	
 	// Render and check
 	view := model.View()
@@ -229,6 +238,9 @@ func TestPromptModeDimmedTree(t *testing.T) {
 	state := domain.NewViewState(root.Path)
 	state = state.SetOpen("/root", true)
 	model.state = state
+	
+	// Initialize the model to set up viewport
+	model.Init()
 	
 	// Get initial view (not in prompt mode)
 	view := model.View()

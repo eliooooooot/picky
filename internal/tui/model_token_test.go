@@ -109,6 +109,9 @@ func TestModel_TokenFunctionality(t *testing.T) {
 		// Open the directory
 		model.state = model.state.SetOpen("/root/dir1", true)
 		
+		// Initialize the model to set up viewport
+		model.Init()
+		
 		// Get the view
 		view := model.View()
 		
@@ -158,6 +161,9 @@ func TestModel_TokenFunctionality(t *testing.T) {
 		assert.Equal(t, 0, model.tokenCount(dir1))
 		assert.Equal(t, 0, model.selectedTokens())
 		
+		// Initialize the model to set up viewport
+		model.Init()
+		
 		// View should still work
 		view := model.View()
 		assert.Contains(t, view, "(0)") // All files show 0 tokens
@@ -198,6 +204,9 @@ func TestModel_TokensWithLargeNumbers(t *testing.T) {
 	ignores := make(map[string]struct{})
 	model := NewModel(tree, &ignores)
 	model.SetTokens(tokens)
+	
+	// Initialize the model to set up viewport
+	model.Init()
 	
 	view := model.View()
 	
