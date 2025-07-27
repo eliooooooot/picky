@@ -7,6 +7,7 @@ import (
 	
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/textarea"
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/tree"
 )
@@ -15,8 +16,8 @@ import (
 type Model struct {
 	tree               *domain.Tree
 	state              domain.ViewState
-	viewportHeight     int
-	viewportOffset     int
+	vp                 viewport.Model
+	paperHeight        int
 	requestedGenerate  bool
 	newIgnores         map[string]struct{}
 	existingIgnores    *map[string]struct{}
@@ -39,11 +40,13 @@ func NewModel(tree *domain.Tree, existingIgnores *map[string]struct{}) *Model {
 	ta.ShowLineNumbers = false
 	ta.SetWidth(80)
 	
+	vp := viewport.New(0, 0) // Initialize with zero size, will be set on WindowSizeMsg
+	
 	return &Model{
 		tree:           tree,
 		state:          domain.NewViewState(tree.Root.Path),
-		viewportHeight: 20,
-		viewportOffset: 0,
+		vp:             vp,
+		paperHeight:    20,
 		newIgnores:     make(map[string]struct{}),
 		existingIgnores: existingIgnores,
 		settings:       defaultSettings(),
@@ -118,6 +121,16 @@ func (m *Model) selectedTokens() int {
 func (m *Model) Init() tea.Cmd {
 	// Open the root directory by default
 	m.state = m.state.SetOpen(m.tree.Root.Path, true)
+	// Set default size if not set yet
+	if m.vp.Width == 0 {
+		m.vp.Width = 80
+	}
+	if m.vp.Height == 0 {
+		m.vp.Height = 20
+	}
+	// Initialize viewport content
+	m.vp.SetContent(m.renderWholeTree())
+	m.ensureCursorVisible()
 	return nil
 }
 
@@ -161,17 +174,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			
 		case "up", "k":
 			m.state = domain.NavigateUp(m.tree.Root, m.state)
-			m.updateViewport()
+			m.ensureCursorVisible()
 			
 		case "down", "j":
 			m.state = domain.NavigateDown(m.tree.Root, m.state)
-			m.updateViewport()
+			m.ensureCursorVisible()
 			
 		case "left", "h":
 			m.state = domain.NavigateOut(m.tree.Root, m.state)
+			// Re-render tree when closing directories
+			m.vp.SetContent(m.renderWholeTree())
+			m.ensureCursorVisible()
 			
 		case "right", "l", "enter":
 			m.state = domain.NavigateIn(m.tree.Root, m.state)
+			// Re-render tree when opening directories
+			m.vp.SetContent(m.renderWholeTree())
+			m.ensureCursorVisible()
 			
 		case " ":
 			m.state = domain.ToggleSelection(m.tree.Root, m.state)
@@ -227,7 +246,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Determine new cursor position using domain logic
 				newCursorPath := domain.NextCursorAfterRemoval(flatBefore, currentIdx, flatAfter)
 				m.state = m.state.SetCursor(newCursorPath)
-				m.updateViewport()
+				m.ensureCursorVisible()
 			}
 		}
 		
@@ -235,9 +254,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.prompt.SetWidth(msg.Width - 4) // Leave room for borders
 		// Calculate prompt height
 		promptLines := strings.Count(m.prompt.View(), "\n") + 3 // +3 for border and title
-		// Adjust viewport height to account for prompt
-		m.viewportHeight = msg.Height - promptLines - 5 // -5 for existing header/footer
-		m.updateViewport()
+		// Calculate paper height for the tree
+		m.paperHeight = msg.Height - promptLines - 5 // -5 for existing header/footer
+		
+		// Update viewport dimensions
+		m.vp.Width = msg.Width
+		m.vp.Height = m.paperHeight
+		
+		// Re-render the tree and set content
+		m.vp.SetContent(m.renderWholeTree())
+		
+		// Clamp scroll offset if necessary
+		if m.vp.TotalLineCount() > 0 && m.vp.YOffset > m.vp.TotalLineCount()-m.vp.Height {
+			m.vp.GotoBottom()
+		}
+		
+		// Ensure cursor remains visible
+		m.ensureCursorVisible()
 	}
 	
 	return m, nil
@@ -284,6 +317,41 @@ func (m *Model) promptCollapsedView() string {
 
 func (m *Model) dim(s string) string {
 	return DimmedStyle.Render(s)
+}
+
+// ensureCursorVisible scrolls the viewport to ensure the cursor is visible
+func (m *Model) ensureCursorVisible() {
+	flat := domain.Flatten(m.tree.Root, m.state)
+	cursor := domain.FindNodeByPath(m.tree.Root, m.state.CursorPath)
+	idx := findIndex(flat, cursor)
+	
+	// Calculate the line number in the rendered tree
+	// We need to account for the fact that the tree is rendered with indentation
+	// and the cursor might be on any line
+	currentLine := idx
+	
+	// Ensure the cursor line is visible
+	if currentLine < m.vp.YOffset {
+		m.vp.SetYOffset(currentLine)
+	} else if currentLine >= m.vp.YOffset+m.vp.Height {
+		m.vp.SetYOffset(currentLine - m.vp.Height + 1)
+	}
+}
+
+// renderWholeTree renders the complete tree structure without any viewport cropping
+func (m *Model) renderWholeTree() string {
+	selectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	cursorStyle := CursorStyle
+	
+	// Build the complete tree starting from root's children
+	items := m.buildTreeItems(m.tree.Root, selectedStyle, cursorStyle)
+	
+	// Create tree with items
+	t := tree.New().
+		EnumeratorStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("241"))).
+		Child(items...)
+	
+	return t.String()
 }
 
 // renderPrompt renders the prompt box
@@ -349,8 +417,11 @@ func (m *Model) View() string {
 	}
 	b.WriteString("\n")
 	
-	// Build and render tree
-	treeView := m.buildTreeView()
+	// Set viewport content with the rendered tree
+	m.vp.SetContent(m.renderWholeTree())
+	
+	// Get the tree view from viewport
+	treeView := m.vp.View()
 	
 	if m.inPromptMode {
 		treeView = m.dim(treeView)
@@ -425,17 +496,6 @@ func (m *Model) renderSettingsModal() string {
 	return modalStyle.Render(content.String())
 }
 
-func (m *Model) updateViewport() {
-	flat := domain.Flatten(m.tree.Root, m.state)
-	cursor := domain.FindNodeByPath(m.tree.Root, m.state.CursorPath)
-	cursorIdx := findIndex(flat, cursor)
-	
-	if cursorIdx < m.viewportOffset {
-		m.viewportOffset = cursorIdx
-	} else if cursorIdx >= m.viewportOffset+m.viewportHeight {
-		m.viewportOffset = cursorIdx - m.viewportHeight + 1
-	}
-}
 
 func findIndex(nodes []*domain.Node, target *domain.Node) int {
 	for i, n := range nodes {
@@ -478,91 +538,21 @@ func shouldRenderAsSelected(node *domain.Node, state domain.ViewState) bool {
 	return domain.HasFullSelection(node, state)
 }
 
-// buildTreeView builds the tree view using lipgloss/tree
-func (m *Model) buildTreeView() string {
-	// Get flattened view for viewport calculation
-	flat := domain.Flatten(m.tree.Root, m.state)
-	cursor := domain.FindNodeByPath(m.tree.Root, m.state.CursorPath)
-	
-	// Adjust viewport to ensure cursor is visible
-	cursorIdx := findIndex(flat, cursor)
-	if cursorIdx < m.viewportOffset {
-		m.viewportOffset = cursorIdx
-	} else if cursorIdx >= m.viewportOffset+m.viewportHeight {
-		m.viewportOffset = cursorIdx - m.viewportHeight + 1
-	}
-	
-	// Style configuration
-	selectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	cursorStyle := CursorStyle
-	
-	// Build tree starting from root's children
-	items := m.buildTreeItems(m.tree.Root, flat, m.viewportOffset, m.viewportOffset+m.viewportHeight, selectedStyle, cursorStyle)
-	
-	// Create tree with items
-	t := tree.New().
-		EnumeratorStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("241"))).
-		Child(items...)
-	
-	return t.String()
-}
 
-// buildTreeItems recursively builds tree items within the viewport range
-func (m *Model) buildTreeItems(node *domain.Node, flat []*domain.Node, start, end int, selectedStyle, cursorStyle lipgloss.Style) []any {
+// buildTreeItems recursively builds tree items for the entire tree
+func (m *Model) buildTreeItems(node *domain.Node, selectedStyle, cursorStyle lipgloss.Style) []any {
 	var items []any
 	
 	// Process root's children directly
 	if node == m.tree.Root {
 		for _, child := range node.Children {
-			childItems := m.buildTreeItems(child, flat, start, end, selectedStyle, cursorStyle)
+			childItems := m.buildTreeItems(child, selectedStyle, cursorStyle)
 			items = append(items, childItems...)
 		}
 		return items
 	}
 	
-	// Find node index in flat list
-	nodeIdx := -1
-	for i, n := range flat {
-		if n.Path == node.Path {
-			nodeIdx = i
-			break
-		}
-	}
-	
-	// Skip if node is outside viewport
-	if nodeIdx != -1 && (nodeIdx < start || nodeIdx >= end) {
-		// But check if any children might be visible
-		if node.IsDir && m.state.IsOpen(node.Path) {
-			for _, child := range node.Children {
-				childIdx := -1
-				for i, n := range flat {
-					if n.Path == child.Path {
-						childIdx = i
-						break
-					}
-				}
-				if childIdx >= start && childIdx < end {
-					// Add this node with its children
-					label := m.formatNodeLabel(node)
-					if node.Path == m.state.CursorPath && !m.inPromptMode {
-						label = cursorStyle.Render(label)
-					} else if shouldRenderAsSelected(node, m.state) {
-						label = selectedStyle.Render(label)
-					}
-					
-					childItems := []any{}
-					for _, c := range node.Children {
-						childItems = append(childItems, m.buildTreeItems(c, flat, start, end, selectedStyle, cursorStyle)...)
-					}
-					
-					return []any{tree.Root(label).Child(childItems...)}
-				}
-			}
-		}
-		return nil
-	}
-	
-	// Node is visible - render it
+	// Render the node
 	label := m.formatNodeLabel(node)
 	
 	// Apply styles
@@ -576,7 +566,7 @@ func (m *Model) buildTreeItems(node *domain.Node, flat []*domain.Node, start, en
 	if node.IsDir && m.state.IsOpen(node.Path) && len(node.Children) > 0 {
 		childItems := []any{}
 		for _, child := range node.Children {
-			childItems = append(childItems, m.buildTreeItems(child, flat, start, end, selectedStyle, cursorStyle)...)
+			childItems = append(childItems, m.buildTreeItems(child, selectedStyle, cursorStyle)...)
 		}
 		return []any{tree.Root(label).Child(childItems...)}
 	}

@@ -57,6 +57,9 @@ func TestAppTokenIntegration(t *testing.T) {
 		model := tui.NewModel(tree, &ignores)
 		model.SetTokens(tokensMap)
 		
+		// Initialize the model to set up viewport
+		model.Init()
+		
 		// The model should now have the token map
 		// We can't directly access it, but we can verify through the view
 		view := model.View()

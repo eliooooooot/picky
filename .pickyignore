@@ -1,9 +1,13 @@
 .claude
 .git
+.gitignore
 .idea
 .pickignore
+.pickyignore
 cmd/picky/.claude
 go.mod
 go.sum
 picky
 picky-bin
+picky-darwin-arm64
+selected.txt
