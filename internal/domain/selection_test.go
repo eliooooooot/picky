@@ -200,3 +200,73 @@ func setParents(node *domain.Node) {
 		setParents(child)
 	}
 }
+
+func TestToggleSubdirectoryAfterParentSelection(t *testing.T) {
+	// Build test tree with nested structure
+	root := &domain.Node{
+		Path:  "/root",
+		Name:  "root",
+		IsDir: true,
+		Children: []*domain.Node{
+			{
+				Path:  "/root/parent",
+				Name:  "parent",
+				IsDir: true,
+				Children: []*domain.Node{
+					{
+						Path:  "/root/parent/child",
+						Name:  "child",
+						IsDir: true,
+						Children: []*domain.Node{
+							{Path: "/root/parent/child/file1.txt", Name: "file1.txt"},
+							{Path: "/root/parent/child/file2.txt", Name: "file2.txt"},
+						},
+					},
+					{Path: "/root/parent/file3.txt", Name: "file3.txt"},
+				},
+			},
+		},
+	}
+	
+	// Set parent pointers
+	setParents(root)
+	
+	state := domain.NewViewState(root.Path)
+	state = state.SetOpen("/root", true)
+	state = state.SetOpen("/root/parent", true)
+	
+	// Step 1: Select parent directory
+	state = state.SetCursor("/root/parent")
+	state = domain.ToggleSelection(root, state)
+	
+	// Verify all files are selected
+	if !domain.HasFullSelection(root.Children[0], state) {
+		t.Error("Parent directory should have full selection")
+	}
+	
+	// The child directory should also appear as having full selection
+	childDir := root.Children[0].Children[0]
+	if !domain.HasFullSelection(childDir, state) {
+		t.Error("Child directory should have full selection after parent is selected")
+	}
+	
+	// Step 2: Navigate to child directory and toggle it
+	state = state.SetCursor("/root/parent/child")
+	state = domain.ToggleSelection(root, state)
+	
+	// Expected: child directory should now be deselected (no files selected)
+	paths := domain.GetSelectedPaths(root, state)
+	
+	// We expect only the parent's direct file to remain selected
+	expectedPaths := []string{"/root/parent/file3.txt"}
+	
+	if len(paths) != len(expectedPaths) {
+		t.Errorf("After toggling child, got %d selected paths, want %d", len(paths), len(expectedPaths))
+		t.Errorf("Selected paths: %v", paths)
+	}
+	
+	// The child directory should no longer have full selection
+	if domain.HasFullSelection(childDir, state) {
+		t.Error("Child directory should NOT have full selection after being toggled")
+	}
+}
