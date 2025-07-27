@@ -325,9 +325,7 @@ func (m *Model) ensureCursorVisible() {
 	cursor := domain.FindNodeByPath(m.tree.Root, m.state.CursorPath)
 	idx := findIndex(flat, cursor)
 	
-	// Calculate the line number in the rendered tree
-	// We need to account for the fact that the tree is rendered with indentation
-	// and the cursor might be on any line
+	// The line number in the rendered tree now directly matches the flattened index
 	currentLine := idx
 	
 	// Ensure the cursor line is visible
@@ -343,7 +341,7 @@ func (m *Model) renderWholeTree() string {
 	selectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 	cursorStyle := CursorStyle
 	
-	// Build the complete tree starting from root's children
+	// Build the complete tree starting from root
 	items := m.buildTreeItems(m.tree.Root, selectedStyle, cursorStyle)
 	
 	// Create tree with items
@@ -541,17 +539,6 @@ func shouldRenderAsSelected(node *domain.Node, state domain.ViewState) bool {
 
 // buildTreeItems recursively builds tree items for the entire tree
 func (m *Model) buildTreeItems(node *domain.Node, selectedStyle, cursorStyle lipgloss.Style) []any {
-	var items []any
-	
-	// Process root's children directly
-	if node == m.tree.Root {
-		for _, child := range node.Children {
-			childItems := m.buildTreeItems(child, selectedStyle, cursorStyle)
-			items = append(items, childItems...)
-		}
-		return items
-	}
-	
 	// Render the node
 	label := m.formatNodeLabel(node)
 	
@@ -630,4 +617,9 @@ func formatTokenCount(count int) string {
 		return fmt.Sprintf("%.1fk", float64(count)/1000)
 	}
 	return fmt.Sprintf("%.1fM", float64(count)/1000000)
+}
+
+// VP returns the viewport for testing purposes
+func (m *Model) VP() *viewport.Model {
+	return &m.vp
 }
