@@ -39,17 +39,17 @@ func collectSelectedPaths(node *Node, state ViewState, paths *[]string) {
 	}
 }
 
-// setSelectionRecursive recursively sets selection state for all descendant files
+// setSelectionRecursive recursively sets selection state for all descendants
 func setSelectionRecursive(node *Node, state ViewState, selected bool) ViewState {
 	newState := state
 	
 	for _, child := range node.Children {
+		// Select/deselect both files and directories
+		newState = newState.SetSelected(child.Path, selected)
+		
+		// If it's a directory, recurse into it
 		if child.IsDir {
-			// Don't automatically select subdirectories, but recurse into them
 			newState = setSelectionRecursive(child, newState, selected)
-		} else {
-			// Select/deselect files
-			newState = newState.SetSelected(child.Path, selected)
 		}
 	}
 	
