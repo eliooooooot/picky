@@ -1,7 +1,7 @@
 package token
 
 import (
-	"github.com/eliotsamuelmiller/picky/internal/domain"
+	"github.com/eliooooooot/picky/internal/domain"
 )
 
 // Counter turns a Tokenizer + domain.FileSystem into a path→count map.

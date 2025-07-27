@@ -1,4 +1,4 @@
-module github.com/eliotsamuelmiller/picky
+module github.com/eliooooooot/picky
 
 go 1.23.5
 

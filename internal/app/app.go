@@ -3,11 +3,11 @@ package app
 import (
 	"fmt"
 	"path/filepath"
-	"github.com/eliotsamuelmiller/picky/internal/domain"
-	"github.com/eliotsamuelmiller/picky/internal/generate"
-	"github.com/eliotsamuelmiller/picky/internal/ignore"
-	"github.com/eliotsamuelmiller/picky/internal/token"
-	"github.com/eliotsamuelmiller/picky/internal/tui"
+	"github.com/eliooooooot/picky/internal/domain"
+	"github.com/eliooooooot/picky/internal/generate"
+	"github.com/eliooooooot/picky/internal/ignore"
+	"github.com/eliooooooot/picky/internal/token"
+	"github.com/eliooooooot/picky/internal/tui"
 	
 	tea "github.com/charmbracelet/bubbletea"
 )

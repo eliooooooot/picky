@@ -2,7 +2,7 @@ package tui
 
 import (
 	"os"
-	"github.com/eliotsamuelmiller/picky/internal/domain"
+	"github.com/eliooooooot/picky/internal/domain"
 	"strings"
 	"testing"
 	

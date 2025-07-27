@@ -5,7 +5,7 @@ import (
 	"io"
 	"io/fs"
 	"path/filepath"
-	"github.com/eliotsamuelmiller/picky/internal/domain"
+	"github.com/eliooooooot/picky/internal/domain"
 	"sort"
 	"time"
 )

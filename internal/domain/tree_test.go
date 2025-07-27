@@ -1,8 +1,8 @@
 package domain_test
 
 import (
-	"github.com/eliotsamuelmiller/picky/internal/domain"
-	"github.com/eliotsamuelmiller/picky/internal/fs"
+	"github.com/eliooooooot/picky/internal/domain"
+	"github.com/eliooooooot/picky/internal/fs"
 	"testing"
 )
 

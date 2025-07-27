@@ -3,8 +3,8 @@ package ignore_test
 import (
 	"testing"
 
-	pickyfs "github.com/eliotsamuelmiller/picky/internal/fs"
-	"github.com/eliotsamuelmiller/picky/internal/ignore"
+	pickyfs "github.com/eliooooooot/picky/internal/fs"
+	"github.com/eliooooooot/picky/internal/ignore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

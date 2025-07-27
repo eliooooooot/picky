@@ -4,9 +4,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/eliotsamuelmiller/picky/internal/domain"
-	pickyfs "github.com/eliotsamuelmiller/picky/internal/fs"
-	"github.com/eliotsamuelmiller/picky/internal/tui"
+	"github.com/eliooooooot/picky/internal/domain"
+	pickyfs "github.com/eliooooooot/picky/internal/fs"
+	"github.com/eliooooooot/picky/internal/tui"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

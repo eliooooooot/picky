@@ -3,7 +3,7 @@ package tui
 import (
 	"testing"
 
-	"github.com/eliotsamuelmiller/picky/internal/domain"
+	"github.com/eliooooooot/picky/internal/domain"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
 )

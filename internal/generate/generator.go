@@ -2,7 +2,7 @@ package generate
 
 import (
 	"fmt"
-	"github.com/eliotsamuelmiller/picky/internal/domain"
+	"github.com/eliooooooot/picky/internal/domain"
 )
 
 // Generate creates the output file with selected files using TextWriter

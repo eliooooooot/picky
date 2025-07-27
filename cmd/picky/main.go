@@ -4,8 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"github.com/eliotsamuelmiller/picky/internal/app"
-	"github.com/eliotsamuelmiller/picky/internal/fs"
+	"github.com/eliooooooot/picky/internal/app"
+	"github.com/eliooooooot/picky/internal/fs"
 )
 
 func main() {

@@ -4,7 +4,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"github.com/eliotsamuelmiller/picky/internal/domain"
+	"github.com/eliooooooot/picky/internal/domain"
 )
 
 // OSFileSystem implements domain.FileSystem using the real OS

@@ -3,8 +3,8 @@ package domain_test
 import (
 	"testing"
 
-	"github.com/eliotsamuelmiller/picky/internal/domain"
-	pickyfs "github.com/eliotsamuelmiller/picky/internal/fs"
+	"github.com/eliooooooot/picky/internal/domain"
+	pickyfs "github.com/eliooooooot/picky/internal/fs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -1,9 +1,9 @@
 package generate_test
 
 import (
-	"github.com/eliotsamuelmiller/picky/internal/domain"
-	"github.com/eliotsamuelmiller/picky/internal/fs"
-	"github.com/eliotsamuelmiller/picky/internal/generate"
+	"github.com/eliooooooot/picky/internal/domain"
+	"github.com/eliooooooot/picky/internal/fs"
+	"github.com/eliooooooot/picky/internal/generate"
 	"strings"
 	"testing"
 )

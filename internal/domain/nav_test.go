@@ -1,7 +1,7 @@
 package domain_test
 
 import (
-	"github.com/eliotsamuelmiller/picky/internal/domain"
+	"github.com/eliooooooot/picky/internal/domain"
 	"testing"
 )
 

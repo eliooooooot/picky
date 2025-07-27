@@ -2,7 +2,7 @@ package tui
 
 import (
 	"fmt"
-	"github.com/eliotsamuelmiller/picky/internal/domain"
+	"github.com/eliooooooot/picky/internal/domain"
 	"strings"
 	
 	tea "github.com/charmbracelet/bubbletea"

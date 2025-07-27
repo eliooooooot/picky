@@ -2,6 +2,7 @@
 .git
 .idea
 .pickignore
+cmd/picky/.claude
 go.mod
 go.sum
 picky

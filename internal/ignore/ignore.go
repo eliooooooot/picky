@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/eliotsamuelmiller/picky/internal/domain"
+	"github.com/eliooooooot/picky/internal/domain"
 )
 
 const ignoreFileName = ".pickyignore"
