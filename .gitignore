@@ -1,0 +1,36 @@
+# Binaries
+picky
+picky-bin
+*.exe
+
+# Output files (anywhere in the tree)
+selected.txt
+**/selected.txt
+
+# IDE and editor files (anywhere in the tree)
+.idea/
+**/.idea/
+.vscode/
+**/.vscode/
+*.swp
+*.swo
+*~
+**/*.swp
+**/*.swo
+**/*~
+
+# Claude settings (anywhere in the tree)
+.claude/
+**/.claude/
+
+# Go build artifacts
+*.test
+*.out
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
