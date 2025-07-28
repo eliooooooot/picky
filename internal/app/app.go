@@ -20,6 +20,13 @@ type App struct {
 
 // Run executes the application
 func (a *App) Run(rootPath string) error {
+	// Convert to absolute path to ensure proper name resolution
+	absPath, err := filepath.Abs(rootPath)
+	if err != nil {
+		return fmt.Errorf("resolve path: %w", err)
+	}
+	rootPath = absPath
+	
 	// Load existing ignores
 	ignores, err := ignore.Load(a.FS, rootPath)
 	if err != nil {
