@@ -1,10 +1,15 @@
 package tui
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/eliooooooot/picky/internal/domain"
+	"github.com/eliooooooot/picky/internal/fs"
+	"github.com/eliooooooot/picky/internal/generate"
 	"strings"
+	"time"
 	
+	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -134,14 +139,16 @@ func (m *Model) Init() tea.Cmd {
 	return nil
 }
 
+// clearStatusMsg is a custom message type for clearing the status message
+type clearStatusMsg struct{}
+
 // Update implements tea.Model
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Decrement status message timer
-	if m.statusMessageTimer > 0 {
-		m.statusMessageTimer--
-	}
-	
 	switch msg := msg.(type) {
+	case clearStatusMsg:
+		m.statusMessage = ""
+		m.statusMessageTimer = 0
+		return m, nil
 	case tea.KeyMsg:
 		// Global quit works regardless of mode
 		if key := msg.String(); key == "ctrl+c" || (key == "q" && !m.inPromptMode) {
@@ -201,6 +208,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.requestedGenerate = true
 			return m, tea.Quit
 			
+		case "c":
+			if err := m.copyToClipboard(); err != nil {
+				m.statusMessage = fmt.Sprintf("Error copying to clipboard: %v", err)
+				m.statusMessageTimer = 1
+			} else {
+				m.statusMessage = "Copied to clipboard!"
+				m.statusMessageTimer = 1
+			}
+			// Return a command that will send clearStatusMsg after 2 seconds
+			return m, tea.Tick(2*time.Second, func(time.Time) tea.Msg {
+				return clearStatusMsg{}
+			})
+			
 		case "s":
 			if m.isSettingsOpen {
 				m.isSettingsOpen = false
@@ -232,7 +252,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if relPath, removedNode := m.tree.ExcludeNode(m.state.CursorPath); removedNode != nil {
 				m.newIgnores[relPath] = struct{}{}
 				m.statusMessage = fmt.Sprintf("Excluded: %s", relPath)
-				m.statusMessageTimer = 30 // Show for ~1 second (30 frames)
+				m.statusMessageTimer = 1
 				
 				// Clean up ViewState by removing references to the excluded path
 				m.state = m.state.Prune(removedNode.Path)
@@ -249,6 +269,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				newCursorPath := domain.NextCursorAfterRemoval(flatBefore, currentIdx, flatAfter)
 				m.state = m.state.SetCursor(newCursorPath)
 				m.ensureCursorVisible()
+				
+				// Return a command that will send clearStatusMsg after 2 seconds
+				return m, tea.Tick(2*time.Second, func(time.Time) tea.Msg {
+					return clearStatusMsg{}
+				})
 			}
 		}
 		
@@ -434,6 +459,45 @@ func (m *Model) ensureCursorVisible() {
 	}
 }
 
+// copyToClipboard copies the selected files content to clipboard
+func (m *Model) copyToClipboard() error {
+	// Create a buffer to write content to
+	var buf bytes.Buffer
+	
+	// Write prompt first if non-empty
+	if prompt := m.prompt.Value(); prompt != "" {
+		fmt.Fprintln(&buf, "# Prompt")
+		fmt.Fprintln(&buf)
+		fmt.Fprintln(&buf, prompt)
+		fmt.Fprintln(&buf) // extra blank line
+	}
+	
+	// Get all selected paths
+	paths := domain.GetSelectedPaths(m.tree.Root, m.state)
+	if len(paths) == 0 {
+		return fmt.Errorf("no files selected")
+	}
+	
+	// Use TextWriter for output
+	writer := generate.NewTextWriter()
+	
+	// Write directory structure
+	if err := writer.WriteStructure(&buf, m.tree.Root, m.state); err != nil {
+		return err
+	}
+	
+	// Use the actual OS filesystem
+	osFS := fs.NewOSFileSystem()
+	
+	// Write file contents
+	if err := writer.WriteContent(&buf, paths, osFS); err != nil {
+		return err
+	}
+	
+	// Copy to clipboard
+	return clipboard.WriteAll(buf.String())
+}
+
 // renderWholeTree renders the complete tree structure without any viewport cropping
 func (m *Model) renderWholeTree() string {
 	// Build the complete tree starting from root
@@ -501,6 +565,7 @@ func (m *Model) View() string {
 			"p prompt",
 			"s settings",
 			"g generate",
+			"c copy to clipboard",
 			"q quit",
 		})
 	}
