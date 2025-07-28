@@ -34,7 +34,7 @@ type Model struct {
 // NewModel creates a new TUI model
 func NewModel(tree *domain.Tree, existingIgnores *map[string]struct{}) *Model {
 	ta := textarea.New()
-	ta.Placeholder = "Enter LLM prompt..."
+	ta.Placeholder = "press p to add a prompt"
 	ta.Prompt = "» "
 	ta.CharLimit = 4096
 	ta.ShowLineNumbers = false
@@ -154,6 +154,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "esc":
 				m.inPromptMode = false
 				m.prompt.Blur()
+				m.prompt.Placeholder = "press p to add a prompt"
 				return m, nil
 			}
 			var cmd tea.Cmd
@@ -170,6 +171,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "p":
 			m.inPromptMode = true
 			m.prompt.Focus()
+			m.prompt.Placeholder = ""
 			return m, nil
 			
 		case "up", "k":
@@ -310,24 +312,109 @@ func (m *Model) updateSettings(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) promptCollapsedView() string {
-	// One-liner, faint border
+	// Faint border
 	border := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(PromptBorderDim)
+		BorderForeground(PromptBorderDim).
+		Width(m.vp.Width - 2) // Account for padding
 
 	value := strings.TrimSpace(m.prompt.Value())
 	if value == "" {
 		value = m.prompt.Placeholder
-	} else if runeCount := len([]rune(value)); runeCount > 60 {
-		value = string([]rune(value)[:60]) + "…"
+	} else {
+		// Split into lines and limit to 3 lines
+		lines := strings.Split(value, "\n")
+		if len(lines) > 3 {
+			lines = lines[:3]
+			// Add ellipsis to the last line
+			if len(lines[2]) > 0 {
+				lines[2] = lines[2] + "…"
+			}
+		}
+		
+		// Rejoin and check total length
+		value = strings.Join(lines, "\n")
+		
+		// If still too long, truncate the last line
+		if len(value) > m.vp.Width*3 {
+			runes := []rune(value)
+			maxRunes := m.vp.Width * 3
+			if len(runes) > maxRunes {
+				value = string(runes[:maxRunes-1]) + "…"
+			}
+		}
 	}
 	value = lipgloss.NewStyle().Faint(true).Render(value)
 
-	return border.Render(" " + value + " ")
+	return border.Render(value)
 }
 
 func (m *Model) dim(s string) string {
 	return DimmedStyle.Render(s)
+}
+
+// formatInstructions formats instruction commands to fit terminal width
+// Never wraps within a command, spans max 2 lines
+func (m *Model) formatInstructions(commands []string) string {
+	if m.vp.Width == 0 {
+		return strings.Join(commands, " • ")
+	}
+	
+	separator := " • "
+	sepLen := len(separator)
+	width := m.vp.Width
+	
+	var lines []string
+	var currentLine []string
+	currentLen := 0
+	
+	for _, cmd := range commands {
+		cmdLen := len(cmd)
+		
+		// Check if adding this command would exceed width
+		neededLen := cmdLen
+		if len(currentLine) > 0 {
+			neededLen += sepLen + cmdLen
+		}
+		
+		if currentLen + neededLen > width && len(currentLine) > 0 {
+			// Start new line
+			lines = append(lines, strings.Join(currentLine, separator))
+			currentLine = []string{cmd}
+			currentLen = cmdLen
+			
+			// Stop if we already have 2 lines
+			if len(lines) >= 2 {
+				break
+			}
+		} else {
+			// Add to current line
+			currentLine = append(currentLine, cmd)
+			if len(currentLine) == 1 {
+				currentLen = cmdLen
+			} else {
+				currentLen += sepLen + cmdLen
+			}
+		}
+	}
+	
+	// Add remaining commands if we haven't hit line limit
+	if len(currentLine) > 0 && len(lines) < 2 {
+		lines = append(lines, strings.Join(currentLine, separator))
+	}
+	
+	// If we couldn't fit all commands, add ellipsis to last line
+	totalCommands := len(commands)
+	commandsFitted := 0
+	for _, line := range lines {
+		commandsFitted += strings.Count(line, separator) + 1
+	}
+	
+	if commandsFitted < totalCommands && len(lines) > 0 {
+		lines[len(lines)-1] += "..."
+	}
+	
+	return strings.Join(lines, "\n")
 }
 
 // ensureCursorVisible scrolls the viewport to ensure the cursor is visible
@@ -387,29 +474,46 @@ func (m *Model) renderPrompt() string {
 func (m *Model) View() string {
 	var b strings.Builder
 	
-	// Render prompt box first
-	b.WriteString(m.renderPrompt())
-	b.WriteString("\n")
-	
 	// Header
 	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
 	header := headerStyle.Render(
-		fmt.Sprintf("Picky - File Selector   •   Tokens selected: ~%s",
+		fmt.Sprintf("⛏️  Picky   •   Tokens selected: ~%s",
 			formatTokenCount(m.selectedTokens())))
 	if m.inPromptMode {
 		header = m.dim(header)
 	}
 	b.WriteString(header)
-	b.WriteString("\n\n")
+	b.WriteString("\n")
 	
 	// Instructions
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	
+	var instructionText string
 	if m.inPromptMode {
-		// Only esc + quit hints
-		b.WriteString(helpStyle.Render("esc: close prompt • ctrl+c/q: quit"))
+		// No instructions shown in prompt mode
+		instructionText = ""
 	} else {
-		b.WriteString(helpStyle.Render("↑/↓ or j/k navigate • ←/→ collapse/expand • space select • x exclude • p prompt • s settings • g generate • q quit"))
+		instructionText = m.formatInstructions([]string{
+			"↑/↓ navigate",
+			"←/→ collapse/expand", 
+			"space select",
+			"x exclude",
+			"p prompt",
+			"s settings",
+			"g generate",
+			"q quit",
+		})
 	}
+	
+	if instructionText != "" {
+		b.WriteString(helpStyle.Render(instructionText))
+		b.WriteString("\n")
+	}
+	
+	b.WriteString("\n") // Empty line above prompt box
+	
+	// Render prompt box after instructions
+	b.WriteString(m.renderPrompt())
 	b.WriteString("\n")
 	
 	// Status message
