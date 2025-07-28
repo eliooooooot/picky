@@ -15,8 +15,16 @@ func main() {
 	flag.Parse()
 	
 	args := flag.Args()
-	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "Usage: picky [options] <directory>")
+	
+	// Default to current directory if no argument provided
+	rootPath := "."
+	if len(args) > 0 {
+		rootPath = args[0]
+	}
+	
+	// Show help if requested
+	if len(args) > 1 {
+		fmt.Fprintln(os.Stderr, "Usage: picky [options] [directory]")
 		fmt.Fprintln(os.Stderr, "Options:")
 		flag.PrintDefaults()
 		fmt.Fprintln(os.Stderr, "\nInteractive controls:")
@@ -30,8 +38,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, "\nExcluded paths are saved to .pickyignore in the target directory.")
 		os.Exit(1)
 	}
-	
-	rootPath := args[0]
 	
 	// Create app with OS filesystem
 	application := &app.App{
