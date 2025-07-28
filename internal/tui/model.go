@@ -280,15 +280,26 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) updateSettings(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
-		// Wrap around navigation (only 1 item for now)
-		m.settingsCursorIdx = (m.settingsCursorIdx - 1 + 1) % 1
+		// Wrap around navigation (2 items now)
+		m.settingsCursorIdx = (m.settingsCursorIdx - 1 + 2) % 2
 	case "down", "j":
-		// Wrap around navigation (only 1 item for now)
-		m.settingsCursorIdx = (m.settingsCursorIdx + 1) % 1
+		// Wrap around navigation (2 items now)
+		m.settingsCursorIdx = (m.settingsCursorIdx + 1) % 2
 	case " ", "enter":
 		// Toggle the highlighted setting
 		if m.settingsCursorIdx == 0 {
 			m.settings = m.settings.ToggleEmoji()
+		}
+		// Color scheme doesn't use space/enter, it uses left/right
+	case "left", "h":
+		// Change color scheme (previous)
+		if m.settingsCursorIdx == 1 {
+			m.settings = m.settings.PrevColorScheme()
+		}
+	case "right", "l":
+		// Change color scheme (next)
+		if m.settingsCursorIdx == 1 {
+			m.settings = m.settings.NextColorScheme()
 		}
 	case "esc", "s":
 		m.isSettingsOpen = false
@@ -338,11 +349,8 @@ func (m *Model) ensureCursorVisible() {
 
 // renderWholeTree renders the complete tree structure without any viewport cropping
 func (m *Model) renderWholeTree() string {
-	selectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	cursorStyle := CursorStyle
-	
 	// Build the complete tree starting from root
-	items := m.buildTreeItems(m.tree.Root, selectedStyle, cursorStyle)
+	items := m.buildTreeItems(m.tree.Root)
 	
 	// Create tree with items
 	t := tree.New().
@@ -452,7 +460,7 @@ func (m *Model) renderSettingsModal() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("240")).
 		Padding(1, 2).
-		Width(40)
+		Width(50)
 	
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
@@ -471,13 +479,12 @@ func (m *Model) renderSettingsModal() string {
 	content.WriteString(titleStyle.Render("Settings"))
 	content.WriteString("\n\n")
 	
-	// Settings items
+	// 1. Emoji setting
 	emojiSetting := "[x] Emoji icons"
 	if !m.settings.Emoji {
 		emojiSetting = "[ ] Emoji icons"
 	}
 	
-	// Apply style based on cursor position
 	if m.settingsCursorIdx == 0 {
 		content.WriteString(selectedStyle.Render(emojiSetting))
 	} else {
@@ -486,9 +493,24 @@ func (m *Model) renderSettingsModal() string {
 	
 	content.WriteString("\n\n")
 	
+	// 2. Color scheme setting
+	colorSchemeSetting := fmt.Sprintf("Color scheme: ← %s →", m.settings.ColorScheme.Name)
+	
+	if m.settingsCursorIdx == 1 {
+		content.WriteString(selectedStyle.Render(colorSchemeSetting))
+	} else {
+		content.WriteString(normalStyle.Render(colorSchemeSetting))
+	}
+	
+	content.WriteString("\n\n")
+	
 	// Help text
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Italic(true)
-	content.WriteString(helpStyle.Render("↑/↓ navigate  space/enter toggle  esc close"))
+	if m.settingsCursorIdx == 1 {
+		content.WriteString(helpStyle.Render("↑/↓ navigate  ←/→ change  esc close"))
+	} else {
+		content.WriteString(helpStyle.Render("↑/↓ navigate  space/enter toggle  esc close"))
+	}
 	
 	// Apply modal styling
 	return modalStyle.Render(content.String())
@@ -514,52 +536,66 @@ func getDepth(node *domain.Node) int {
 	return depth
 }
 
-// shouldRenderAsSelected determines if a node should be rendered with selected styling
-func shouldRenderAsSelected(node *domain.Node, state domain.ViewState) bool {
-	// Files are selected if explicitly selected or if any parent directory has full selection
-	if !node.IsDir {
-		if state.IsSelected(node.Path) {
-			return true
-		}
-		// Check if any parent directory has full selection
-		parent := node.Parent
-		for parent != nil {
-			if domain.HasFullSelection(parent, state) {
-				return true
-			}
-			parent = parent.Parent
-		}
-		return false
-	}
-	
-	// Directories are selected only if they have full selection
-	return domain.HasFullSelection(node, state)
-}
-
 
 // buildTreeItems recursively builds tree items for the entire tree
-func (m *Model) buildTreeItems(node *domain.Node, selectedStyle, cursorStyle lipgloss.Style) []any {
-	// Render the node
-	label := m.formatNodeLabel(node)
-	
-	// Apply styles
-	if node.Path == m.state.CursorPath && !m.inPromptMode {
-		label = cursorStyle.Render(label)
-	} else if shouldRenderAsSelected(node, m.state) {
-		label = selectedStyle.Render(label)
-	}
+func (m *Model) buildTreeItems(node *domain.Node) []any {
+	// Get the formatted label with cursor/selection styling applied
+	label := m.formatNodeLabelWithStyle(node)
 	
 	// Handle directories with children
 	if node.IsDir && m.state.IsOpen(node.Path) && len(node.Children) > 0 {
 		childItems := []any{}
 		for _, child := range node.Children {
-			childItems = append(childItems, m.buildTreeItems(child, selectedStyle, cursorStyle)...)
+			childItems = append(childItems, m.buildTreeItems(child)...)
 		}
 		return []any{tree.Root(label).Child(childItems...)}
 	}
 	
 	// Leaf node or closed directory
 	return []any{label}
+}
+
+// formatNodeLabelWithStyle formats a node's label and applies appropriate styling
+func (m *Model) formatNodeLabelWithStyle(node *domain.Node) string {
+	// First get the plain formatted label
+	label := m.formatNodeLabel(node)
+	
+	// Determine the appropriate color based on selection state
+	var color lipgloss.Color
+	if node.IsDir {
+		if domain.HasFullSelection(node, m.state) {
+			color = m.settings.ColorScheme.Selected
+		} else if domain.HasPartialSelection(node, m.state) {
+			color = m.settings.ColorScheme.PartiallySelected
+		} else {
+			color = m.settings.ColorScheme.Unselected
+		}
+	} else {
+		if m.state.IsSelected(node.Path) {
+			color = m.settings.ColorScheme.Selected
+		} else {
+			color = m.settings.ColorScheme.Unselected
+		}
+	}
+	
+	// Apply styling based on cursor position
+	if node.Path == m.state.CursorPath && !m.inPromptMode {
+		// Cursor is on this item - use block background
+		// For Classic scheme with dark backgrounds, use white text
+		textColor := lipgloss.Color("0") // Default black text
+		if m.settings.ColorScheme.Name == "Classic" {
+			textColor = lipgloss.Color("255") // White text for Classic
+		}
+		
+		cursorStyle := lipgloss.NewStyle().
+			Background(color).
+			Foreground(textColor)
+		return cursorStyle.Render(label)
+	} else {
+		// Cursor is elsewhere - use text color only
+		textStyle := lipgloss.NewStyle().Foreground(color)
+		return textStyle.Render(label)
+	}
 }
 
 // formatNodeLabel formats a node's label with selection and directory indicators
@@ -570,7 +606,7 @@ func (m *Model) formatNodeLabel(node *domain.Node) string {
 		if domain.HasFullSelection(node, m.state) {
 			selected = "✓"
 		} else if domain.HasPartialSelection(node, m.state) {
-			selected = "-"
+			selected = "~"
 		}
 	} else if m.state.IsSelected(node.Path) {
 		selected = "✓"
